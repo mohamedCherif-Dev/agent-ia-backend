@@ -2,84 +2,171 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Agent IA Local</title>
+  <title>Agent IA Local - Dashboard</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 0; padding: 20px;
       background: #f4f6f8;
       display: flex; gap: 20px;
+      height: 90vh;
     }
     .panel {
       background: #fff; border-radius: 8px;
       padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column;
     }
-    .chat-panel { flex: 2; display: flex; flex-direction: column; height: 85vh; }
-    .side-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+    .sessions-panel { flex: 1; max-width: 280px; }
+    .chat-panel { flex: 3; height: 100%; }
+    .side-panel { flex: 1.2; gap: 15px; }
+
     .messages {
       flex: 1; overflow-y: auto; border: 1px solid #ddd;
-      padding: 10px; border-radius: 5px; margin-bottom: 10px; background: #fafafa;
+      padding: 15px; border-radius: 5px; margin-bottom: 10px; background: #fafafa;
     }
-    .msg { margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; max-width: 80%; }
+    .msg { margin-bottom: 15px; padding: 10px 14px; border-radius: 6px; max-width: 85%; line-height: 1.4; word-break: break-word; }
     .user { background: #007bff; color: white; margin-left: auto; }
     .assistant { background: #e9ecef; color: #333; }
-    .tools { font-size: 0.8em; color: #ff9800; font-weight: bold; margin-top: 4px; }
+    .assistant pre { background: #2d3748; color: #fff; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    .assistant code { font-family: monospace; background: rgba(0,0,0,0.05); padding: 2px 4px; border-radius: 3px; }
+    .tools { font-size: 0.8em; color: #d97706; font-weight: bold; margin-top: 6px; border-top: 1px solid #ddd; padding-top: 4px; }
+    
     .input-box { display: flex; gap: 10px; }
     input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
     button { padding: 10px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button:hover { background: #218838; }
-    .status { padding: 8px; border-radius: 4px; font-weight: bold; text-align: center; }
+
+    .session-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; border: 1px solid #eee; border-radius: 4px; }
+    .session-item { 
+      padding: 8px 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 0.85em; 
+      display: flex; justify-content: space-between; align-items: center; 
+    }
+    .session-item:hover { background: #f1f3f5; }
+    .session-item.active { background: #007bff; color: white; font-weight: bold; }
+    .session-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px; }
+    
+    .btn-delete {
+      background: transparent; color: #dc3545; border: none; padding: 2px 6px; 
+      font-size: 0.9em; cursor: pointer; border-radius: 3px; font-weight: bold;
+    }
+    .session-item.active .btn-delete { color: #ffe6e6; }
+    .btn-delete:hover { background: rgba(220, 53, 69, 0.2); }
+
+    .status { padding: 8px; border-radius: 4px; font-weight: bold; text-align: center; font-size: 0.9em; }
     .ok { background: #d4edda; color: #155724; }
     .err { background: #f8d7da; color: #721c24; }
+    hr { width: 100%; border: 0.5px solid #eee; margin: 10px 0; }
   </style>
 </head>
 <body>
 
+  <!-- Panneau des Sessions -->
+  <div class="panel sessions-panel">
+    <h3>💬 Sessions</h3>
+    <button onclick="startNewSession()" style="margin-bottom: 10px; background: #007bff; font-size: 0.9em;">+ Nouvelle Session</button>
+    <ul id="sessionList" class="session-list"></ul>
+  </div>
+
   <!-- Panneau de Chat Principal -->
   <div class="panel chat-panel">
-    <h2>💬 Chat Agent IA</h2>
+    <h2 id="chatTitle" style="margin-top:0; font-size: 1.2em;">Chat Agent IA</h2>
     <div id="messages" class="messages"></div>
     <div class="input-box">
-      <input type="text" id="userInput" placeholder="Posez votre question (ex: Combien font 25*4 ? Ou quels sont les produits en stock ?)..." onkeypress="if(event.key==='Enter') sendMessage()">
+      <input type="text" id="userInput" placeholder="Posez votre question..." onkeypress="if(event.key==='Enter') sendMessage()">
       <button onclick="sendMessage()">Envoyer</button>
     </div>
   </div>
 
   <!-- Panneau Latéral (Santé + RAG Ingest) -->
   <div class="panel side-panel">
-    <h3>⚙️ État du Service</h3>
+    <h3>⚙️ Système</h3>
     <div id="healthStatus" class="status">Vérification...</div>
-    <button onclick="checkHealth()">Rafraîchir Santé</button>
+    <button onclick="checkHealth()" style="font-size:0.9em;">Rafraîchir Santé</button>
 
-    <hr style="width:100%; border:0.5px solid #eee;">
+    <hr>
 
     <h3>📚 Ingestion RAG</h3>
-    <input type="text" id="filenameInput" placeholder="ex: bienvenue.txt">
-    <button onclick="ingestFile()" style="background:#17a2b8;">Indexer le fichier</button>
-    <div id="ingestResult" style="font-size:0.9em; margin-top:5px;"></div>
+    <input type="text" id="filenameInput" placeholder="ex: bienvenue.txt" style="font-size:0.9em;">
+    <button onclick="ingestFile()" style="background:#17a2b8; font-size:0.9em;">Indexer le fichier</button>
+    <div id="ingestResult" style="font-size:0.85em; color:#555;"></div>
 
-    <h4>📄 Documents indexés :</h4>
-    <ul id="docList" style="padding-left:20px; font-size:0.9em;"></ul>
+    <h4 style="margin: 5px 0;">📄 Documents indexés :</h4>
+    <ul id="docList" style="padding-left:15px; font-size:0.85em; margin:0;"></ul>
   </div>
 
   <script>
-    let sessionId = null;
+    let currentSessionId = null;
+    let sessions = JSON.parse(localStorage.getItem('chat_sessions') || '[]');
+
+    function saveSessionsToStorage() {
+      localStorage.setItem('chat_sessions', JSON.stringify(sessions));
+    }
+
+    function startNewSession() {
+      currentSessionId = null;
+      document.getElementById('messages').innerHTML = '';
+      document.getElementById('chatTitle').innerText = 'Nouvelle Session';
+      renderSessions();
+    }
+
+    function renderSessions() {
+      const list = document.getElementById('sessionList');
+      list.innerHTML = sessions.map(s => `
+        <li class="session-item ${s.id === currentSessionId ? 'active' : ''}" onclick="switchSession('${s.id}')">
+          <span class="session-title">💬 ${s.title}</span>
+          <button class="btn-delete" title="Supprimer la session" onclick="deleteSession(event, '${s.id}')">❌</button>
+        </li>
+      `).join('');
+    }
+
+    async function deleteSession(event, id) {
+      // Empêche le clic de propager et de basculer sur la session avant de la supprimer
+      event.stopPropagation();
+
+      // Fenêtre de confirmation obligatoire
+      const confirmation = confirm("Êtes-vous sûr de vouloir supprimer cette session et son historique ?");
+      if (!confirmation) return;
+
+      try {
+        // Appel de l'API DELETE /sessions/:id
+        await fetch(`/sessions/${id}`, { method: 'DELETE' });
+      } catch (e) {
+        console.warn('Erreur réseau lors de la suppression sur le serveur:', e);
+      }
+
+      // Nettoyage local
+      sessions = sessions.filter(s => s.id !== id);
+      saveSessionsToStorage();
+
+      if (currentSessionId === id) {
+        startNewSession();
+      } else {
+        renderSessions();
+      }
+    }
+
+    function switchSession(id) {
+      const session = sessions.find(s => s.id === id);
+      if (!session) return;
+      currentSessionId = session.id;
+      document.getElementById('chatTitle').innerText = `Session: ${session.title.substring(0, 15)}...`;
+      
+      const box = document.getElementById('messages');
+      box.innerHTML = '';
+      session.messages.forEach(m => addMessageUI(m.role, m.content, m.tools));
+      renderSessions();
+    }
 
     async function checkHealth() {
       const el = document.getElementById('healthStatus');
       try {
         const res = await fetch('/health');
         const data = await res.json();
-        if (data.status === 'OK') {
-          el.className = 'status ok';
-          el.innerText = '✅ API, SQLite & Ollama Prêts';
-        } else {
-          el.className = 'status err';
-          el.innerText = '❌ Erreur de service';
-        }
+        el.className = `status ${data.status === 'OK' ? 'ok' : 'err'}`;
+        el.innerText = data.status === 'OK' ? '✅ Services Opérationnels' : '❌ Erreur Service';
       } catch (e) {
         el.className = 'status err';
-        el.innerText = '❌ Serveur injoignable';
+        el.innerText = '❌ Serveur Injoignable';
       }
     }
 
@@ -88,33 +175,58 @@
       const text = input.value.trim();
       if (!text) return;
 
-      addMessage('user', text);
+      addMessageUI('user', text);
       input.value = '';
 
+      if (!currentSessionId) {
+        currentSessionId = 'sess_' + Date.now();
+        sessions.unshift({ id: currentSessionId, title: text, messages: [] });
+      }
+
+      const currentSession = sessions.find(s => s.id === currentSessionId);
+      currentSession.messages.push({ role: 'user', content: text });
+
       try {
-        const res = await fetch('/chat', {
+        const res = evaluateChatAPI(text); // appel standard fetch
+        const response = await fetch('/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, sessionId })
+          body: JSON.stringify({ message: text, sessionId: currentSessionId })
         });
-        const data = await res.json();
+        const data = await response.json();
 
-        sessionId = data.sessionId;
         let toolsText = data.toolsUsed && data.toolsUsed.length > 0 
           ? `<div class="tools">🔧 Outils utilisés : ${data.toolsUsed.join(', ')}</div>` 
           : '';
 
-        addMessage('assistant', data.response + toolsText);
+        addMessageUI('assistant', data.response, toolsText);
+        currentSession.messages.push({ role: 'assistant', content: data.response, tools: toolsText });
+        
+        saveSessionsToStorage();
+        renderSessions();
       } catch (e) {
-        addMessage('assistant', '⚠️ Erreur lors de la réponse.');
+        addMessageUI('assistant', '⚠️ Erreur de communication avec le serveur.');
       }
     }
 
-    function addMessage(role, htmlContent) {
+    function addMessageUI(role, content, toolsHtml = '') {
       const box = document.getElementById('messages');
       const div = document.createElement('div');
       div.className = `msg ${role}`;
-      div.innerHTML = htmlContent;
+      
+      if (role === 'assistant') {
+        let formatted = content
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+          .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+          .replace(/\n/g, '<br>');
+        div.innerHTML = formatted + toolsHtml;
+      } else {
+        div.innerText = content;
+      }
+
       box.appendChild(div);
       box.scrollTop = box.scrollHeight;
     }
@@ -124,7 +236,7 @@
       const resEl = document.getElementById('ingestResult');
       if (!filename) return;
 
-      resEl.innerText = "Indexing...";
+      resEl.innerText = "Indexation en cours...";
       try {
         const res = await fetch('/ingest', {
           method: 'POST',
@@ -132,10 +244,10 @@
           body: JSON.stringify({ filename })
         });
         const data = await res.json();
-        resEl.innerText = data.message ? `✅ ${data.message} (${data.chunksIndexed} chunks)` : `❌ ${data.error}`;
+        resEl.innerText = data.message ? `✅ ${data.chunksIndexed} chunks indexés` : `❌ ${data.error}`;
         loadDocs();
       } catch (e) {
-        resEl.innerText = "❌ Erreur d'ingestion";
+        resEl.innerText = "❌ Erreur réseau";
       }
     }
 
@@ -150,6 +262,7 @@
 
     checkHealth();
     loadDocs();
+    renderSessions();
   </script>
 </body>
 </html>
