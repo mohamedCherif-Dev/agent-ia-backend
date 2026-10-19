@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Agent IA Local</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 20px;
+      background: #f4f6f8;
+      display: flex; gap: 20px;
+    }
+    .panel {
+      background: #fff; border-radius: 8px;
+      padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .chat-panel { flex: 2; display: flex; flex-direction: column; height: 85vh; }
+    .side-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+    .messages {
+      flex: 1; overflow-y: auto; border: 1px solid #ddd;
+      padding: 10px; border-radius: 5px; margin-bottom: 10px; background: #fafafa;
+    }
+    .msg { margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; max-width: 80%; }
+    .user { background: #007bff; color: white; margin-left: auto; }
+    .assistant { background: #e9ecef; color: #333; }
+    .tools { font-size: 0.8em; color: #ff9800; font-weight: bold; margin-top: 4px; }
+    .input-box { display: flex; gap: 10px; }
+    input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+    button { padding: 10px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #218838; }
+    .status { padding: 8px; border-radius: 4px; font-weight: bold; text-align: center; }
+    .ok { background: #d4edda; color: #155724; }
+    .err { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+
+  <!-- Panneau de Chat Principal -->
+  <div class="panel chat-panel">
+    <h2>💬 Chat Agent IA</h2>
+    <div id="messages" class="messages"></div>
+    <div class="input-box">
+      <input type="text" id="userInput" placeholder="Posez votre question (ex: Combien font 25*4 ? Ou quels sont les produits en stock ?)..." onkeypress="if(event.key==='Enter') sendMessage()">
+      <button onclick="sendMessage()">Envoyer</button>
+    </div>
+  </div>
+
+  <!-- Panneau Latéral (Santé + RAG Ingest) -->
+  <div class="panel side-panel">
+    <h3>⚙️ État du Service</h3>
+    <div id="healthStatus" class="status">Vérification...</div>
+    <button onclick="checkHealth()">Rafraîchir Santé</button>
+
+    <hr style="width:100%; border:0.5px solid #eee;">
+
+    <h3>📚 Ingestion RAG</h3>
+    <input type="text" id="filenameInput" placeholder="ex: bienvenue.txt">
+    <button onclick="ingestFile()" style="background:#17a2b8;">Indexer le fichier</button>
+    <div id="ingestResult" style="font-size:0.9em; margin-top:5px;"></div>
+
+    <h4>📄 Documents indexés :</h4>
+    <ul id="docList" style="padding-left:20px; font-size:0.9em;"></ul>
+  </div>
+
+  <script>
+    let sessionId = null;
+
+    async function checkHealth() {
+      const el = document.getElementById('healthStatus');
+      try {
+        const res = await fetch('/health');
+        const data = await res.json();
+        if (data.status === 'OK') {
+          el.className = 'status ok';
+          el.innerText = '✅ API, SQLite & Ollama Prêts';
+        } else {
+          el.className = 'status err';
+          el.innerText = '❌ Erreur de service';
+        }
+      } catch (e) {
+        el.className = 'status err';
+        el.innerText = '❌ Serveur injoignable';
+      }
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('userInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      addMessage('user', text);
+      input.value = '';
+
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, sessionId })
+        });
+        const data = await res.json();
+
+        sessionId = data.sessionId;
+        let toolsText = data.toolsUsed && data.toolsUsed.length > 0 
+          ? `<div class="tools">🔧 Outils utilisés : ${data.toolsUsed.join(', ')}</div>` 
+          : '';
+
+        addMessage('assistant', data.response + toolsText);
+      } catch (e) {
+        addMessage('assistant', '⚠️ Erreur lors de la réponse.');
+      }
+    }
+
+    function addMessage(role, htmlContent) {
+      const box = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      div.innerHTML = htmlContent;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function ingestFile() {
+      const filename = document.getElementById('filenameInput').value.trim();
+      const resEl = document.getElementById('ingestResult');
+      if (!filename) return;
+
+      resEl.innerText = "Indexing...";
+      try {
+        const res = await fetch('/ingest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        });
+        const data = await res.json();
+        resEl.innerText = data.message ? `✅ ${data.message} (${data.chunksIndexed} chunks)` : `❌ ${data.error}`;
+        loadDocs();
+      } catch (e) {
+        resEl.innerText = "❌ Erreur d'ingestion";
+      }
+    }
+
+    async function loadDocs() {
+      try {
+        const res = await fetch('/documents');
+        const data = await res.json();
+        const ul = document.getElementById('docList');
+        ul.innerHTML = (data.documents || []).map(d => `<li>${d}</li>`).join('') || '<li>Aucun document</li>';
+      } catch (e) {}
+    }
+
+    checkHealth();
+    loadDocs();
+  </script>
+</body>
+</html>
