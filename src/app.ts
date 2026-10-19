@@ -6,6 +6,7 @@ import { db, initDatabase } from './db/database';
 import { Ollama } from 'ollama';
 
 import chatRouter from './routes/chat';
+import sessionsRouter from './routes/sessions'; // <- On sépare dans un fichier dédié pour les sessions
 import ingestRouter from './routes/ingest';
 import documentsRouter from './routes/documents';
 
@@ -18,8 +19,9 @@ initDatabase();
 
 const ollama = new Ollama({ host: config.ollamaHost });
 
-// Enregistrement des routes API (Conforme au contrat du cahier des charges)
+// Enregistrement propre des routes API
 app.use('/chat', chatRouter);
+app.use('/sessions', sessionsRouter); // <- Utilise un routeur dédié aux sessions
 app.use('/ingest', ingestRouter);
 app.use('/documents', documentsRouter);
 
