@@ -1,7 +1,7 @@
 import { Ollama } from 'ollama';
 import { randomUUID } from 'crypto';
 import { config } from '../config/env';
-import { db } from '../db/database';
+import  db from '../db/database';
 import { toolDefinitions, executeTool } from '../tools';
 import { getRelevantContext } from '../rag';
 

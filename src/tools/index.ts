@@ -1,7 +1,7 @@
 import { evaluate } from 'mathjs';
 import fs from 'fs';
 import path from 'path';
-import { db } from '../db/database';
+import db from '../db/database'; // Import direct par défaut
 import { config } from '../config/env';
 
 // 1. Déclaration des schémas d'outils pour Ollama

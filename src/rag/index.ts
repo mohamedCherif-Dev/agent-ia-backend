@@ -2,7 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { Ollama } from 'ollama';
 import { config } from '../config/env';
-import { db } from '../db/database';
+import db from '../db/database'; // Import direct par défaut
+// @ts-ignore
+import pdfParse from 'pdf-parse';
 
 const ollama = new Ollama({ host: config.ollamaHost });
 
@@ -25,15 +27,31 @@ function chunkText(text: string, chunkSize: number = 500, overlap: number = 50):
   return chunks;
 }
 
-// Indexation d'un fichier du corpus (POST /ingest)
+// Indexation d'un fichier du corpus (POST /ingest) - Support TXT, MD et PDF
 export async function ingestFile(filename: string): Promise<{ chunksIndexed: number }> {
   const filePath = path.isAbsolute(filename) ? filename : path.join(config.corpusPath, filename);
 
   if (!fs.existsSync(filePath)) {
-    throw new Error(`Le fichier '${filename}' n'existe pas.`);
+    throw new Error(`Le fichier '${filename}' n'existe pas dans le corpus.`);
   }
 
-  const content = fs.readFileSync(filePath, 'utf-8');
+  let content = '';
+  const ext = path.extname(filename).toLowerCase();
+
+  // Extraction du texte selon le format du fichier
+  if (ext === '.pdf') {
+    const dataBuffer = fs.readFileSync(filePath);
+    const parsedPdf = await pdfParse(dataBuffer);
+    content = parsedPdf.text;
+  } else {
+    // Par défaut : lecture texte brut (txt, md, etc.)
+    content = fs.readFileSync(filePath, 'utf-8');
+  }
+
+  if (!content || content.trim().length === 0) {
+    throw new Error(`Le fichier '${filename}' est vide ou illisible.`);
+  }
+
   const chunks = chunkText(content);
 
   // Supprimer les anciens chunks du même fichier si ré-indexé

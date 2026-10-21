@@ -2,7 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { config } from './config/env';
-import { db, initDatabase } from './db/database';
+import { initDatabase } from './db/database';
+import  db  from './db/database';
 import { Ollama } from 'ollama';
 
 import chatRouter from './routes/chat';
