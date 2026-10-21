@@ -32,7 +32,10 @@
     .tools { font-size: 0.8em; color: #d97706; font-weight: bold; margin-top: 6px; border-top: 1px solid #ddd; padding-top: 4px; }
     
     .input-box { display: flex; gap: 10px; }
-    input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+    input[type="text"], select { padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+    input[type="text"] { flex: 1; }
+    select { width: 100%; font-size: 0.9em; background: #fff; }
+    
     button { padding: 10px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button:hover { background: #218838; }
 
@@ -77,8 +80,17 @@
     </div>
   </div>
 
-  <!-- Panneau Latéral (Santé + RAG Ingest) -->
+  <!-- Panneau Latéral (Rôle + Santé + RAG Ingest) -->
   <div class="panel side-panel">
+    <h3>🔐 Profil & Rôle</h3>
+    <select id="roleSelect">
+      <option value="admin">🔴 Admin (Accès total BDD & RAG)</option>
+      <option value="comptable">🟡 Comptable (Finances & Commandes)</option>
+      <option value="guest" selected>🟢 Guest / Invité (Documents RAG seuls)</option>
+    </select>
+
+    <hr>
+
     <h3>⚙️ Système</h3>
     <div id="healthStatus" class="status">Vérification...</div>
     <button onclick="checkHealth()" style="font-size:0.9em;">Rafraîchir Santé</button>
@@ -120,21 +132,16 @@
     }
 
     async function deleteSession(event, id) {
-      // Empêche le clic de propager et de basculer sur la session avant de la supprimer
       event.stopPropagation();
-
-      // Fenêtre de confirmation obligatoire
       const confirmation = confirm("Êtes-vous sûr de vouloir supprimer cette session et son historique ?");
       if (!confirmation) return;
 
       try {
-        // Appel de l'API DELETE /sessions/:id
         await fetch(`/sessions/${id}`, { method: 'DELETE' });
       } catch (e) {
         console.warn('Erreur réseau lors de la suppression sur le serveur:', e);
       }
 
-      // Nettoyage local
       sessions = sessions.filter(s => s.id !== id);
       saveSessionsToStorage();
 
@@ -170,10 +177,11 @@
       }
     }
 
-    async function sendMessage() {
-      const input = document.getElementById('userInput');
-      const text = input.value.trim();
-      if (!text) return;
+   async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  const selectedRole = document.getElementById('roleSelect').value; // <--- Récupération du rôle
+  if (!text) return;
 
       addMessageUI('user', text);
       input.value = '';
@@ -187,11 +195,15 @@
       currentSession.messages.push({ role: 'user', content: text });
 
       try {
-        const response = await fetch('/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, sessionId: currentSessionId })
-        });
+    const response = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        message: text, 
+        sessionId: currentSessionId,
+        role: selectedRole // <--- Transmission au backend
+      })
+    });
         const data = await response.json();
 
         let toolsText = data.toolsUsed && data.toolsUsed.length > 0 
@@ -215,7 +227,7 @@
       div.className = `msg ${role}`;
       
       if (role === 'assistant') {
-        let formatted = content
+        let formatted = (content || '')
           .replace(/&/g, "&amp;")
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;")

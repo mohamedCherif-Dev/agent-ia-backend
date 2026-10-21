@@ -55,13 +55,13 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'execute_sql_query',
-      description: 'Exécute une requête SQL SELECT sur la table "products". Colonnes disponibles : id, name, category, price, stock.',
+      description: 'Exécute une requête SQL SELECT sur l\'ERP de l\'entreprise. Tables disponibles : clients, orders, order_items, products, categories, suppliers, invoices, employees, departments, payroll, inventory_logs, audit_logs.',
       parameters: {
         type: 'object',
         properties: {
           query: {
             type: 'string',
-            description: 'La requête SQL SELECT. Exemple: "SELECT * FROM products"',
+            description: 'La requête SQL SELECT. Exemple: "SELECT * FROM clients"',
           },
         },
         required: ['query'],
@@ -70,8 +70,8 @@ export const toolDefinitions = [
   },
 ];
 
-// 2. Exécuteur centralisé des outils
-export async function executeTool(name: string, args: Record<string, any>): Promise<string> {
+// 2. Exécuteur centralisé des outils avec contrôle d'accès par rôle (RBAC)
+export async function executeTool(name: string, args: Record<string, any>, role: string = 'guest'): Promise<string> {
   try {
     switch (name) {
       case 'calculate': {
@@ -101,10 +101,26 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       }
 
       case 'execute_sql_query': {
+        // Règle RBAC 1 : Les invités (guest) n'ont aucun accès aux outils de base de données
+        if (role === 'guest') {
+          return JSON.stringify({ error: 'Accès refusé : Le rôle "Guest" ne dispose pas des droits d\'accès à la base de données.' });
+        }
+
         const queryTrimmed = String(args.query || '').trim();
 
         if (!queryTrimmed.toUpperCase().startsWith('SELECT')) {
           return JSON.stringify({ error: 'Sécurité : Seules les requêtes SELECT en lecture seule sont autorisées.' });
+        }
+
+        // Règle RBAC 2 : Filtrage par table pour le rôle 'comptable'
+        if (role === 'comptable') {
+          const upperQuery = queryTrimmed.toUpperCase();
+          const forbiddenTables = ['AUDIT_LOGS', 'USERS', 'ROLES', 'DEPARTMENTS'];
+          for (const table of forbiddenTables) {
+            if (upperQuery.includes(table)) {
+              return JSON.stringify({ error: `Accès refusé : Le rôle "Comptable" n'est pas autorisé à consulter la table "${table.toLowerCase()}".` });
+            }
+          }
         }
 
         // Exécution de la requête sur SQLite

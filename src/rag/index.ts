@@ -2,11 +2,32 @@ import fs from 'fs';
 import path from 'path';
 import { Ollama } from 'ollama';
 import { config } from '../config/env';
-import db from '../db/database'; // Import direct par défaut
+import db from '../db/database'; 
+
 // @ts-ignore
-import pdfParse from 'pdf-parse';
+const PDFParser = require('pdf2json');
 
 const ollama = new Ollama({ host: config.ollamaHost });
+
+// Fonction robuste pour extraire le texte d'un PDF avec pdf2json
+function parsePdfBuffer(buffer: Buffer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    // 1 : active le mode texte brut text-only
+    const pdfParser = new (PDFParser as any)(null, 1);
+    
+    pdfParser.on("pdfParser_dataError", (err: any) => reject(err.parserError));
+    pdfParser.on("pdfParser_dataReady", () => {
+      try {
+        const rawText = pdfParser.getRawTextContent();
+        resolve(rawText || '');
+      } catch (e) {
+        reject(e);
+      }
+    });
+    
+    pdfParser.parseBuffer(buffer);
+  });
+}
 
 // Calcul de similarité cosinus entre deux vecteurs
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -41,10 +62,8 @@ export async function ingestFile(filename: string): Promise<{ chunksIndexed: num
   // Extraction du texte selon le format du fichier
   if (ext === '.pdf') {
     const dataBuffer = fs.readFileSync(filePath);
-    const parsedPdf = await pdfParse(dataBuffer);
-    content = parsedPdf.text;
+    content = await parsePdfBuffer(dataBuffer);
   } else {
-    // Par défaut : lecture texte brut (txt, md, etc.)
     content = fs.readFileSync(filePath, 'utf-8');
   }
 
