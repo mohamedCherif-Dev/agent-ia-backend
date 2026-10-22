@@ -2,12 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { config } from './config/env';
-import { initDatabase } from './db/database';
-import  db  from './db/database';
+import { dbErp } from './db/database'; // Importation de la BDD ERP principale
 import { Ollama } from 'ollama';
 
 import chatRouter from './routes/chat';
-import sessionsRouter from './routes/sessions'; // <- On sépare dans un fichier dédié pour les sessions
+import sessionsRouter from './routes/sessions';
 import ingestRouter from './routes/ingest';
 import documentsRouter from './routes/documents';
 
@@ -16,23 +15,21 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-initDatabase();
-
 const ollama = new Ollama({ host: config.ollamaHost });
 
 // Enregistrement propre des routes API
 app.use('/chat', chatRouter);
-app.use('/sessions', sessionsRouter); // <- Utilise un routeur dédié aux sessions
+app.use('/sessions', sessionsRouter);
 app.use('/ingest', ingestRouter);
 app.use('/documents', documentsRouter);
 
-// Endpoint /health (S1)
+// Endpoint /health
 app.get('/health', async (req, res) => {
   let ollamaOk = false;
   let dbOk = false;
 
   try {
-    db.prepare('SELECT 1').get();
+    dbErp.prepare('SELECT 1').get();
     dbOk = true;
   } catch (err) {
     dbOk = false;
